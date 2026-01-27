@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skribbl Pro Ultimate</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+
+    <div id="setupScreen" class="overlay">
+        <div class="modal">
+            <h1 class="logo">skribbl.pro</h1>
+            <div class="avatar-select">
+                <button onclick="changeAvatar(-1)">◀</button>
+                <div id="avatarPreview">😎</div>
+                <button onclick="changeAvatar(1)">▶</button>
+            </div>
+            <input type="text" id="username" placeholder="Enter Your Name" maxlength="15">
+            <div class="tabs">
+                <button onclick="showTab('host')" class="active-tab">Create (Host)</button>
+                <button onclick="showTab('join')">Join</button>
+            </div>
+
+            <div id="hostPanel" class="panel">
+                <div class="form-group">
+                    <label>Players:</label>
+                    <input type="number" id="sMaxP" min="2" max="50" value="8">
+                </div>
+                <div class="form-group">
+                    <label>Time (s):</label>
+                    <input type="number" id="sTime" value="80">
+                </div>
+                <div class="form-group">
+                    <label>Rounds:</label>
+                    <input type="number" id="sRounds" value="3">
+                </div>
+                <textarea id="sWords" placeholder="Custom words (comma separated)."></textarea>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="spectatorMode"> Host is Spectator
+                </label>
+                <button onclick="hostRoom()" class="btn-main btn-host">Create Room</button>
+            </div>
+
+            <div id="joinPanel" class="panel" style="display:none;">
+                <input type="text" id="joinCode" placeholder="Enter Room Code">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="joinAsSpectator"> Join as Spectator
+                </label>
+                <button onclick="joinRoom()" class="btn-main btn-join">Play!</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="gameScreen" style="display:none;" class="game-container">
+        <div class="game-header">
+            <div class="header-left">
+                <div class="timer">⏱ <span id="timerDisplay">0</span></div>
+                <div id="hostControls" style="display:none;">
+                    <button id="startBtn" onclick="startGame()">START</button>
+                    <button id="pauseBtn" onclick="togglePause()"><i class="fa-solid fa-pause"></i></button>
+                </div>
+            </div>
+            
+            <div class="word-hint-container">
+                <div id="wordHintTop">WAITING...</div>
+                <div id="wordHintBottom" class="word-box"></div>
+            </div>
+            
+            <div class="room-code" id="roomCodeDisplay">Code: ???</div>
+        </div>
+
+        <div class="game-body">
+            <div class="sidebar players">
+                <div id="playerList"></div>
+                <div id="spectatorList"></div>
+            </div>
+
+            <div class="main-stage">
+                <div class="canvas-wrapper">
+                    <canvas id="canvas"></canvas>
+                     <div id="overlayMessage" style="display:none;"></div>
+                </div>
+
+                <div class="toolbar" id="toolbar" style="display:none;">
+                    <div class="tool-section">
+                        <button class="tool-btn active" onclick="setTool('brush')" title="Brush"><i class="fa-solid fa-paintbrush"></i></button>
+                        <button class="tool-btn" onclick="setTool('pencil')" title="Pencil"><i class="fa-solid fa-pencil"></i></button>
+                        <button class="tool-btn" onclick="setTool('eraser')" title="Eraser"><i class="fa-solid fa-eraser"></i></button>
+                         <button class="tool-btn" onclick="fillCanvas()" title="Fill Background"><i class="fa-solid fa-fill-drip"></i></button>
+                    </div>
+                    
+                     <div class="tool-section shapes-section">
+                        <button class="tool-btn" onclick="setTool('line')" title="Line">📏</button>
+                        <button class="tool-btn" onclick="setTool('rectangle')" title="Rectangle">⬜</button>
+                        <button class="tool-btn" onclick="setTool('circle')" title="Circle">⭕</button>
+                        <button class="tool-btn" onclick="setTool('triangle')" title="Triangle">🔺</button>
+                    </div>
+
+                    <div class="tool-section options-section">
+                        <div class="size-slider-container">
+                            <i class="fa-solid fa-circle-dot small-icon"></i>
+                            <input type="range" id="sizeSlider" min="2" max="50" value="5" oninput="setSize(this.value)">
+                             <i class="fa-solid fa-circle large-icon"></i>
+                        </div>
+                        <div class="color-palette" id="colorPalette"></div>
+                         <input type="color" id="colorPicker" value="#000000" onchange="setColor(this.value)">
+                    </div>
+
+                    <div class="tool-section action-section">
+                        <button class="tool-btn" onclick="undo()" title="Undo"><i class="fa-solid fa-rotate-left"></i></button>
+                        <button class="tool-btn" onclick="redo()" title="Redo"><i class="fa-solid fa-rotate-right"></i></button>
+                        <button class="tool-btn btn-clear" onclick="clearCanvasAction()" title="Clear All"><i class="fa-solid fa-trash-can"></i></button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar chat">
+                <div id="chatBox"></div>
+                <input type="text" id="guessInput" placeholder="Type your guess...">
+            </div>
+        </div>
+    </div>
+
+    <div id="wordSelect" class="overlay" style="display:none;">
+        <div class="modal word-modal">
+            <h2>Choose a Word</h2>
+            <div id="wordChoices" class="choices-container"></div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
