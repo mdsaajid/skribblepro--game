@@ -3,7 +3,7 @@ const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const toolbar = document.getElementById('toolbar');
 
-// ================= GAME STATE =================
+// Game State
 let myCode = "";
 let myId = "";
 let isMyTurn = false;
@@ -11,36 +11,122 @@ let isHost = false;
 let isSpectator = false;
 let canDraw = false; 
 
-// ================= DRAWING STATE =================
+// Drawing State
 let isDrawing = false;
 let currentTool = 'brush'; 
 let currentColor = '#000000';
 let currentSize = 5;
 let startX, startY;
 let snapshot; 
-
 let undoStack = [];
 let redoStack = [];
 
-// ================= INITIALIZATION =================
-const avatars = ['😎', '👽', '🤠', '👻', '🤖', '🐱', '🐶', '🦊', '🦁', '🐸', '🦄', '🐲'];
+// Init Setup
+const avatars = ['😎', '👽', '🤠', '👻', '🤖', '🐱', '🐶', '🦊', '🦁', '🐸'];
 let avatarIdx = 0;
-const paletteColors = ['#000000', '#ffffff', '#7f7f7f', '#c3c3c3', '#880015', '#b97a57', '#ed1c24', '#ffaec9', '#ff7f27', '#ffc90e', '#fff200', '#efe4b0', '#22b14c', '#b5e61d', '#00a2e8', '#99d9ea', '#3f48cc', '#7092be', '#a349a4', '#c8bfe7'];
 
-function initPalette() {
-    const container = document.getElementById('colorPalette');
-    paletteColors.forEach(color => {
-        const div = document.createElement('div');
-        div.className = 'palette-color';
-        div.style.backgroundColor = color;
-        div.onclick = () => setColor(color);
-        if(color === currentColor) div.classList.add('active');
-        container.appendChild(div);
-    });
+// --- TOUCH & MOUSE HANDLING (Crucial for Mobile) ---
+const getPos = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    // Use first touch if available, otherwise mouse
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return {
+        x: (clientX - rect.left) * (canvas.width / rect.width),
+        y: (clientY - rect.top) * (canvas.height / rect.height)
+    };
 }
-initPalette();
 
-// ================= TOOLBAR FUNCTIONS =================
+const startDraw = (e) => {
+    if (!canDraw) return;
+    // Prevent scrolling on touch devices
+    if(e.type === 'touchstart') e.preventDefault();
+    
+    isDrawing = true;
+    saveState(); 
+    const pos = getPos(e);
+    startX = pos.x;
+    startY = pos.y;
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    snapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    
+    if (['brush', 'pencil', 'eraser'].includes(currentTool)) {
+        draw(e); 
+    }
+}
+
+const draw = (e) => {
+    if (!isDrawing || !canDraw) return;
+    if(e.type === 'touchmove') e.preventDefault(); // Critical: Stop screen drag
+    
+    const pos = getPos(e);
+    ctx.lineWidth = currentSize;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    if (currentTool === 'brush' || currentTool === 'pencil') {
+        ctx.strokeStyle = currentColor;
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+    } else if (currentTool === 'eraser') {
+        ctx.strokeStyle = '#ffffff'; 
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+    } else {
+        // Shapes
+        ctx.putImageData(snapshot, 0, 0);
+        ctx.beginPath();
+        drawShape(pos.x, pos.y);
+    }
+}
+
+const stopDraw = (e) => {
+    if (!isDrawing) return;
+    if (e && e.type === 'touchend') e.preventDefault();
+    isDrawing = false;
+    ctx.beginPath(); 
+    emitCanvasUpdate();
+}
+
+function drawShape(endX, endY) {
+    ctx.fillStyle = currentColor;
+    ctx.strokeStyle = currentColor;
+    if (currentTool === 'rectangle') {
+        ctx.strokeRect(startX, startY, endX - startX, endY - startY);
+    } else if (currentTool === 'circle') {
+        const radius = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
+        ctx.beginPath();
+        ctx.arc(startX, startY, radius, 0, 2 * Math.PI);
+        ctx.stroke();
+    } else if (currentTool === 'triangle') {
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.lineTo(startX + (startX - endX), endY);
+        ctx.closePath();
+        ctx.stroke();
+    } else if (currentTool === 'line') {
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+    }
+}
+
+// Add Listeners (Passive: False is required for preventing scroll)
+canvas.addEventListener('mousedown', startDraw);
+canvas.addEventListener('mousemove', draw);
+canvas.addEventListener('mouseup', stopDraw);
+canvas.addEventListener('mouseout', stopDraw);
+
+canvas.addEventListener('touchstart', startDraw, { passive: false });
+canvas.addEventListener('touchmove', draw, { passive: false });
+canvas.addEventListener('touchend', stopDraw, { passive: false });
+canvas.addEventListener('touchcancel', stopDraw);
+
+// --- OTHER FUNCTIONS ---
+
 function setTool(tool) {
     currentTool = tool;
     document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
@@ -52,17 +138,6 @@ function setTool(tool) {
 function setColor(color) {
     currentColor = color;
     document.getElementById('colorPicker').value = color;
-    document.querySelectorAll('.palette-color').forEach(div => {
-        div.classList.toggle('active', div.style.backgroundColor === color);
-        if(rgbToHex(div.style.backgroundColor) === color) div.classList.add('active');
-    });
-}
-
-function rgbToHex(rgb) {
-    if (rgb.startsWith('#')) return rgb;
-    rgb = rgb.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
-    if(!rgb) return rgb;
-    return "#" + ("0" + parseInt(rgb[1],10).toString(16)).slice(-2) + ("0" + parseInt(rgb[2],10).toString(16)).slice(-2) + ("0" + parseInt(rgb[3],10).toString(16)).slice(-2);
 }
 
 function setSize(size) {
@@ -79,7 +154,7 @@ function undo() {
     if (undoStack.length > 0) {
         redoStack.push(canvas.toDataURL()); 
         restoreState(undoStack.pop());
-        setTimeout(() => emitCanvasUpdate(), 50);
+        setTimeout(emitCanvasUpdate, 50);
     }
 }
 
@@ -87,7 +162,7 @@ function redo() {
     if (redoStack.length > 0) {
         undoStack.push(canvas.toDataURL()); 
         restoreState(redoStack.pop());
-        setTimeout(() => emitCanvasUpdate(), 50);
+        setTimeout(emitCanvasUpdate, 50);
     }
 }
 
@@ -115,101 +190,6 @@ function fillCanvas() {
     emitCanvasUpdate();
 }
 
-
-// ================= DRAWING ENGINE =================
-const getPos = (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    return {
-        x: (clientX - rect.left) * (canvas.width / rect.width),
-        y: (clientY - rect.top) * (canvas.height / rect.height)
-    };
-}
-
-const startDraw = (e) => {
-    if (!canDraw) return;
-    isDrawing = true;
-    saveState(); 
-    const pos = getPos(e);
-    startX = pos.x;
-    startY = pos.y;
-    ctx.beginPath();
-    ctx.moveTo(startX, startY);
-    snapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    if (currentTool === 'brush' || currentTool === 'pencil' || currentTool === 'eraser') {
-        draw(e); 
-    }
-    e.preventDefault();
-}
-
-const draw = (e) => {
-    if (!isDrawing || !canDraw) return;
-    const pos = getPos(e);
-    
-    ctx.lineWidth = currentSize;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    if (currentTool === 'brush' || currentTool === 'pencil') {
-        ctx.strokeStyle = currentColor;
-        ctx.lineTo(pos.x, pos.y);
-        ctx.stroke();
-    } else if (currentTool === 'eraser') {
-        ctx.strokeStyle = '#ffffff'; 
-        ctx.lineTo(pos.x, pos.y);
-        ctx.stroke();
-    } else {
-        ctx.putImageData(snapshot, 0, 0);
-        ctx.beginPath();
-        drawShape(pos.x, pos.y);
-    }
-    e.preventDefault();
-}
-
-const stopDraw = () => {
-    if (!isDrawing) return;
-    isDrawing = false;
-    ctx.beginPath(); 
-    emitCanvasUpdate();
-}
-
-function drawShape(endX, endY) {
-    ctx.fillStyle = currentColor;
-    ctx.strokeStyle = currentColor;
-
-    if (currentTool === 'rectangle') {
-        ctx.strokeRect(startX, startY, endX - startX, endY - startY);
-    } else if (currentTool === 'circle') {
-        const radius = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
-        ctx.beginPath();
-        ctx.arc(startX, startY, radius, 0, 2 * Math.PI);
-        ctx.stroke();
-    } else if (currentTool === 'triangle') {
-        ctx.beginPath();
-        ctx.moveTo(startX, startY);
-        ctx.lineTo(endX, endY);
-        ctx.lineTo(startX + (startX - endX), endY);
-        ctx.closePath();
-        ctx.stroke();
-    } else if (currentTool === 'line') {
-        ctx.beginPath();
-        ctx.moveTo(startX, startY);
-        ctx.lineTo(endX, endY);
-        ctx.stroke();
-    }
-}
-
-canvas.addEventListener('mousedown', startDraw);
-canvas.addEventListener('mousemove', draw);
-canvas.addEventListener('mouseup', stopDraw);
-canvas.addEventListener('mouseout', stopDraw);
-
-canvas.addEventListener('touchstart', startDraw, { passive: false });
-canvas.addEventListener('touchmove', draw, { passive: false });
-canvas.addEventListener('touchend', stopDraw);
-canvas.addEventListener('touchcancel', stopDraw);
-
 function emitCanvasUpdate() {
     if(canDraw) {
        const imageData = canvas.toDataURL('image/png', 0.5); 
@@ -217,7 +197,7 @@ function emitCanvasUpdate() {
     }
 }
 
-// ================= UI / SETUP =================
+// --- UI HELPERS ---
 function changeAvatar(dir) {
     avatarIdx = (avatarIdx + dir + avatars.length) % avatars.length;
     document.getElementById('avatarPreview').innerText = avatars[avatarIdx];
@@ -233,7 +213,6 @@ function showTab(tab) {
 function resizeCanvas() {
     const displayWidth = canvas.parentElement.offsetWidth;
     const displayHeight = canvas.parentElement.offsetHeight;
-    
     if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
         const savedData = canvas.toDataURL();
         canvas.width = displayWidth;
@@ -243,6 +222,7 @@ function resizeCanvas() {
 }
 window.addEventListener('resize', resizeCanvas);
 
+// --- SOCKET LOGIC ---
 function hostRoom() {
     const rawWords = document.getElementById('sWords').value;
     const words = rawWords.split(',').map(w => w.trim()).filter(w => w.length > 0);
@@ -260,7 +240,7 @@ function hostRoom() {
 
 function joinRoom() {
     const code = document.getElementById('joinCode').value.toUpperCase().trim();
-    if(code.length < 5) { alert("Invalid Room Code"); return; }
+    if(code.length < 5) { alert("Invalid Code"); return; }
     const username = document.getElementById('username').value.trim() || "Guest";
     isSpectator = document.getElementById('joinAsSpectator').checked;
     socket.emit('joinRoom', { username, code, avatar: avatars[avatarIdx], isSpectator });
@@ -283,12 +263,11 @@ socket.on('roomCreated', (code) => {
     if (isHost) document.getElementById('hostControls').style.display = 'flex';
 });
 socket.on('joinSuccess', ({ code }) => { enterGame(code); });
-
 socket.on('youAreSpectator', () => {
     isSpectator = true;
     toolbar.style.display = 'none';
     document.getElementById('guessInput').disabled = true;
-    document.getElementById('guessInput').placeholder = "Spectating Mode";
+    document.getElementById('guessInput').placeholder = "Spectating...";
 });
 
 socket.on('updatePlayers', ({ players, drawerId }) => {
@@ -297,90 +276,65 @@ socket.on('updatePlayers', ({ players, drawerId }) => {
         <div class="player-card ${p.hasGuessed ? 'has-guessed' : ''} ${p.id === drawerId ? 'is-drawer' : ''}">
             <span>${p.avatar} ${p.username} ${p.id === drawerId ? '🖌️' : ''}</span>
             <span class="player-score">${p.score}</span>
-            ${isHost && p.id !== myId ? `<button class="kick-btn" onclick="kick('${p.id}')"><i class="fa-solid fa-xmark"></i></button>` : ''}
+            ${isHost && p.id !== myId ? `<button class="kick-btn" onclick="kick('${p.id}')">X</button>` : ''}
         </div>
     `).join('');
 });
 
 socket.on('updateSpectators', (specs) => {
     const list = document.getElementById('spectatorList');
-    list.innerHTML = specs.length ? "<h4>Spectators</h4>" + specs.map(s => `
+    list.innerHTML = specs.length ? "<h4>Specs</h4>" + specs.map(s => `
         <div class="player-card" style="opacity: 0.7;">
             <span>${s.avatar} ${s.username}</span>
-            ${isHost && s.id !== myId ? `<button class="kick-btn" onclick="kick('${s.id}', true)"><i class="fa-solid fa-xmark"></i></button>` : ''}
+            ${isHost && s.id !== myId ? `<button class="kick-btn" onclick="kick('${s.id}', true)">X</button>` : ''}
         </div>
     `).join('') : "";
 });
 
-socket.on('canvasUpdate', (imageData) => {
-    if (imageData) {
-        restoreState(imageData);
-    } else {
-        ctx.clearRect(0, 0, canvas.width, canvas.height); 
-    }
-});
-
-socket.on('timerUpdate', (time) => document.getElementById('timerDisplay').innerText = time);
+socket.on('canvasUpdate', (img) => { if(img) restoreState(img); else ctx.clearRect(0,0,canvas.width,canvas.height); });
+socket.on('timerUpdate', (t) => document.getElementById('timerDisplay').innerText = t);
 
 socket.on('newTurn', ({ drawerId }) => {
     isMyTurn = myId === drawerId;
     toolbar.style.display = (isMyTurn && !isSpectator) ? 'flex' : 'none';
     document.getElementById('guessInput').disabled = isMyTurn || isSpectator;
-    document.getElementById('wordHintTop').innerText = isMyTurn ? "YOUR TURN TO DRAW!" : "GUESS THIS";
+    document.getElementById('wordHintTop').innerText = isMyTurn ? "DRAW:" : "GUESS:";
     document.getElementById('wordHintBottom').innerText = "WAITING...";
-    
-    undoStack = [];
-    redoStack = [];
-    canDraw = false; 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    setTool('brush'); 
-    setColor('#000000');
+    undoStack = []; redoStack = []; canDraw = false; 
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    setTool('brush'); setColor('#000000');
 });
 
 socket.on('wordHint', ({ hint, length }) => {
-    document.getElementById('wordHintTop').innerText = `GUESS THIS (${length} Letters)`;
+    document.getElementById('wordHintTop').innerText = `WORD (${length})`;
     document.getElementById('wordHintBottom').innerText = hint;
 });
-
 socket.on('yourWord', (w) => {
     document.getElementById('wordHintTop').innerText = "DRAW THIS:";
     document.getElementById('wordHintBottom').innerText = w;
     canDraw = true; 
 });
-
 socket.on('chooseWord', (words) => {
     const div = document.getElementById('wordChoices');
     div.innerHTML = words.map(w => `<button onclick="selectWord('${w}')">${w}</button>`).join('');
     document.getElementById('wordSelect').style.display = 'flex';
 });
-
 socket.on('chatMsg', (data) => {
     const chat = document.getElementById('chatBox');
     const d = document.createElement('div');
-    if (data.sys) {
-        d.classList.add('sys');
-        d.innerText = data.msg;
-    } else {
-        d.innerHTML = `<strong>${data.username}:</strong> ${data.msg}`;
-    }
-    chat.appendChild(d);
-    chat.scrollTop = chat.scrollHeight;
+    if (data.sys) { d.classList.add('sys'); d.innerText = data.msg; }
+    else { d.innerHTML = `<strong>${data.username}:</strong> ${data.msg}`; }
+    chat.appendChild(d); chat.scrollTop = chat.scrollHeight;
 });
-
 socket.on('gamePaused', (paused) => {
-    document.getElementById('pauseBtn').innerHTML = paused ? '<i class="fa-solid fa-play"></i>' : '<i class="fa-solid fa-pause"></i>';
-    const overlay = document.getElementById('overlayMessage');
-    overlay.innerText = "GAME PAUSED BY HOST";
-    overlay.style.display = paused ? 'flex' : 'none';
+    document.getElementById('pauseBtn').innerText = paused ? "RESUME" : "PAUSE";
+    document.getElementById('overlayMessage').style.display = paused ? 'flex' : 'none';
+    document.getElementById('overlayMessage').innerText = "PAUSED";
 });
-
-socket.on('gameOver', ({ winner }) => {
-    alert(`GAME OVER!\nWinner: ${winner.username} with ${winner.score} points!`);
-    location.reload();
-});
-
+socket.on('gameOver', ({ winner }) => { alert(`WINNER: ${winner.username} (${winner.score}pts)`); location.reload(); });
 socket.on('errorMsg', (msg) => alert(msg));
 
+// Inputs
 const guessInput = document.getElementById('guessInput');
 guessInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter' && guessInput.value.trim()) {
@@ -388,14 +342,10 @@ guessInput.addEventListener('keypress', (e) => {
         guessInput.value = '';
     }
 });
-
 function selectWord(word) {
     socket.emit('wordChosen', { code: myCode, word });
     document.getElementById('wordSelect').style.display = 'none';
 }
-
 function kick(id, spec=false) {
-    if(confirm("Are you sure you want to kick this player?")) {
-        socket.emit('kickPlayer', { code: myCode, playerId: id, isSpectator: spec });
-    }
+    if(confirm("Kick player?")) socket.emit('kickPlayer', { code: myCode, playerId: id, isSpectator: spec });
 }
