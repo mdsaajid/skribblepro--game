@@ -1,125 +1,175 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Skribbl Pro Mobile</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Skribbl Pro Ultimate</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
     <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
 
-    <div id="setupScreen" class="overlay">
-        <div class="modal">
-            <h1 class="logo">skribbl.pro</h1>
-            <div class="avatar-select">
-                <button onclick="changeAvatar(-1)">◀</button>
-                <div id="avatarPreview">😎</div>
-                <button onclick="changeAvatar(1)">▶</button>
+    <div class="bg-gradient"></div>
+    <div class="bg-shape shape-1"></div>
+    <div class="bg-shape shape-2"></div>
+    <div id="confetti-container"></div>
+    <div id="toast-container"></div>
+    <div id="reaction-layer"></div>
+
+    <div id="setupScreen" class="screen active">
+        <div class="glass-panel lobby-panel">
+            <h1 class="game-title">Skribbl<span class="pro-tag">PRO</span></h1>
+            
+            <div class="avatar-wrapper">
+                <button class="nav-btn" onclick="changeAvatar(-1)" aria-label="Previous Avatar"><i class="fa-solid fa-chevron-left"></i></button>
+                <div class="avatar-circle" id="avatarPreview">😎</div>
+                <button class="nav-btn" onclick="changeAvatar(1)" aria-label="Next Avatar"><i class="fa-solid fa-chevron-right"></i></button>
             </div>
-            <input type="text" id="username" placeholder="Your Name" maxlength="12">
-            <div class="tabs">
-                <button onclick="showTab('host')" class="active-tab">Create</button>
-                <button onclick="showTab('join')">Join</button>
+            <input type="text" id="username" placeholder="Enter Nickname" maxlength="12" class="input-modern" aria-label="Nickname">
+
+            <div class="tab-container">
+                <button class="tab-btn active" onclick="showTab('host')">Create Room</button>
+                <button class="tab-btn" onclick="showTab('join')">Join Room</button>
             </div>
 
-            <div id="hostPanel" class="panel">
-                <div class="form-group">
-                    <label>Players:</label> <input type="number" id="sMaxP" value="8" style="width:50px">
+            <div id="hostPanel" class="tab-content">
+                <div class="setting-row">
+                    <label><i class="fa-solid fa-users"></i> Players: <span id="valMaxP">8</span></label>
+                    <input type="range" id="sMaxP" min="2" max="20" value="8" oninput="updateSliderUI(this, 'valMaxP')">
                 </div>
-                <div class="form-group">
-                    <label>Time:</label> <input type="number" id="sTime" value="80" style="width:50px">
+                <div class="setting-row">
+                    <label><i class="fa-solid fa-stopwatch"></i> Time: <span id="valTime">80</span>s</label>
+                    <input type="range" id="sTime" min="30" max="180" step="10" value="80" oninput="updateSliderUI(this, 'valTime')">
                 </div>
-                <div class="form-group">
-                    <label>Rounds:</label> <input type="number" id="sRounds" value="3" style="width:50px">
+                <div class="setting-row">
+                    <label><i class="fa-solid fa-rotate"></i> Rounds: <span id="valRounds">3</span></label>
+                    <input type="range" id="sRounds" min="1" max="10" value="3" oninput="updateSliderUI(this, 'valRounds')">
                 </div>
-                <textarea id="sWords" placeholder="Custom words (optional)" rows="2"></textarea>
-                <label class="checkbox-label">
-                    <input type="checkbox" id="spectatorMode"> Host is Spectator
-                </label>
-                <button onclick="hostRoom()" class="btn-main btn-host">Create Room</button>
+                
+                <div class="setting-row checkbox-row">
+                    <label for="spectatorMode" style="cursor:pointer; display:flex; align-items:center; gap:10px;">
+                        <input type="checkbox" id="spectatorMode" style="width:20px; height:20px;">
+                        <span>Host as Spectator</span>
+                    </label>
+                </div>
+
+                <textarea id="sWords" class="input-modern" placeholder="Custom Words (Optional)" rows="2"></textarea>
+                
+                <button id="btnCreate" onclick="hostRoom()" class="btn-primary glow-effect">CREATE ROOM</button>
             </div>
 
-            <div id="joinPanel" class="panel" style="display:none;">
-                <input type="text" id="joinCode" placeholder="Room Code">
-                <label class="checkbox-label">
-                    <input type="checkbox" id="joinAsSpectator"> Spectate
-                </label>
-                <button onclick="joinRoom()" class="btn-main btn-join">Play!</button>
+            <div id="joinPanel" class="tab-content" style="display:none;">
+                <input type="text" id="joinCode" placeholder="Enter Room Code" class="input-modern">
+                <div class="setting-row checkbox-row" style="margin-bottom: 10px; justify-content: center;">
+                    <label for="joinSpectator" style="cursor:pointer; display:flex; align-items:center; gap:10px;">
+                        <input type="checkbox" id="joinSpectator" style="width:20px; height:20px;">
+                        <span>Join as Spectator</span>
+                    </label>
+                </div>
+                <button onclick="joinRoom()" class="btn-secondary glow-effect">JOIN GAME</button>
             </div>
         </div>
     </div>
 
-    <div id="gameScreen" style="display:none;" class="game-container">
-        <div class="game-header">
+    <div id="gameScreen" class="screen">
+        <header class="game-header">
             <div class="header-left">
-                <div class="timer">⏱ <span id="timerDisplay">0</span></div>
-                <div id="hostControls" style="display:none;">
-                    <button id="startBtn" onclick="startGame()">▶</button>
-                    <button id="pauseBtn" onclick="togglePause()">⏸</button>
+                <div class="timer-badge">
+                    <i class="fa-solid fa-clock"></i> <span id="timerDisplay">0</span>
                 </div>
+                <button id="headerStartBtn" class="btn-mini-start" onclick="startGame()" style="display:none;">
+                    <i class="fa-solid fa-play"></i> START
+                </button>
             </div>
-            
-            <div class="word-hint-container">
+
+            <div class="word-display">
                 <div id="wordHintTop">WAITING...</div>
-                <div id="wordHintBottom" class="word-box"></div>
+                <div id="wordHintBottom"></div>
             </div>
             
-            <div class="room-code" id="roomCodeDisplay">???</div>
-        </div>
-
-        <div class="game-body">
-            <div class="sidebar players">
-                <div id="playerList"></div>
-                <div id="spectatorList"></div>
+            <div class="header-right">
+                <div class="room-code-badge" id="headerRoomCode">CODE: ---</div>
+                <button class="icon-btn" onclick="toggleMenu()" title="Menu">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
             </div>
+        </header>
 
-            <div class="main-stage">
-                <div class="canvas-wrapper">
-                    <canvas id="canvas"></canvas>
-                     <div id="overlayMessage" style="display:none;"></div>
+        <div class="game-grid">
+            <aside class="sidebar-left glass-panel">
+                <h3>Players</h3>
+                <div id="playerList" class="player-scroller"></div>
+            </aside>
+
+            <main class="canvas-container glass-panel">
+                <canvas id="canvas"></canvas>
+                <div id="overlayMessage"></div>
+                
+                <div class="reaction-bar">
+                    <button class="reaction-btn like" onclick="sendReaction('like')" title="Like">👍</button>
+                    <button class="reaction-btn dislike" onclick="sendReaction('dislike')" title="Dislike">👎</button>
                 </div>
 
-                <div class="toolbar" id="toolbar" style="display:none;">
-                    <div class="tool-section">
+                <div id="toolbar" class="toolbar glass-panel">
+                    <div class="tools-group">
                         <button class="tool-btn active" onclick="setTool('brush')"><i class="fa-solid fa-paintbrush"></i></button>
                         <button class="tool-btn" onclick="setTool('pencil')"><i class="fa-solid fa-pencil"></i></button>
                         <button class="tool-btn" onclick="setTool('eraser')"><i class="fa-solid fa-eraser"></i></button>
                         <button class="tool-btn" onclick="fillCanvas()"><i class="fa-solid fa-fill-drip"></i></button>
                     </div>
-                    
-                    <div class="tool-section shapes-section">
-                        <button class="tool-btn" onclick="setTool('line')">📏</button>
+                    <div class="colors-group">
+                        <input type="color" id="colorPicker" onchange="setColor(this.value)">
+                        <div class="quick-colors" id="quickColors"></div>
+                    </div>
+                    <div class="tools-group shapes-group">
                         <button class="tool-btn" onclick="setTool('rectangle')">⬜</button>
                         <button class="tool-btn" onclick="setTool('circle')">⭕</button>
                     </div>
-
-                    <div class="options-section">
-                        <div class="size-slider-container">
-                            <input type="range" id="sizeSlider" min="2" max="40" value="5" oninput="setSize(this.value)">
-                        </div>
-                         <input type="color" id="colorPicker" value="#000000" onchange="setColor(this.value)">
-                    </div>
-
-                    <div class="tool-section action-section">
+                    <div class="actions-group">
+                        <input type="range" id="sizeSlider" min="2" max="40" value="5">
                         <button class="tool-btn" onclick="undo()"><i class="fa-solid fa-rotate-left"></i></button>
-                        <button class="tool-btn btn-clear" onclick="clearCanvasAction()"><i class="fa-solid fa-trash-can"></i></button>
+                        <button class="tool-btn delete-btn" onclick="clearCanvasAction()"><i class="fa-solid fa-trash"></i></button>
                     </div>
                 </div>
-            </div>
+            </main>
 
-            <div class="sidebar chat">
+            <aside class="sidebar-right glass-panel">
                 <div id="chatBox"></div>
-                <input type="text" id="guessInput" placeholder="Guess here...">
-            </div>
+                <div class="chat-input-area">
+                    <input type="text" id="guessInput" placeholder="Type guess...">
+                </div>
+            </aside>
         </div>
     </div>
 
-    <div id="wordSelect" class="overlay" style="display:none;">
-        <div class="modal word-modal">
-            <h2>Pick Word</h2>
-            <div id="wordChoices" class="choices-container"></div>
+    <div id="gameOverScreen" class="overlay">
+        <div class="glass-panel podium-panel">
+            <h1 class="glow-text">GAME OVER!</h1>
+            <div class="podium-container" id="podiumContainer"></div>
+            <div class="leaderboard-list" id="finalLeaderboard"></div>
+            <button class="btn-primary" onclick="location.reload()">BACK TO LOBBY</button>
+        </div>
+    </div>
+
+    <div id="wordSelect" class="overlay">
+        <div class="glass-panel word-panel">
+            <h2>It's your turn!</h2>
+            <div id="wordChoices" class="word-grid"></div>
+        </div>
+    </div>
+
+    <div id="mobileMenu" class="overlay" style="display:none;">
+        <div class="glass-panel menu-panel">
+            <h2>Game Menu</h2>
+            <div class="room-code-display" id="menuRoomCode">CODE: ---</div>
+            <hr>
+            <div id="hostControls" style="display:none;">
+                <button class="btn-primary" onclick="startGame()">Start Game</button>
+                <button class="btn-secondary" onclick="togglePause()">Pause / Resume</button>
+            </div>
+            <button class="btn-danger" onclick="toggleMenu()">Close</button>
         </div>
     </div>
 
